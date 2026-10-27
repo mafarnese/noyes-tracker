@@ -1,0 +1,58 @@
+name: Log Purple Line data
+
+on:
+  schedule:
+    # 20:17 UTC on weekdays = 3:17pm CDT (2:17pm CST after Nov 1).
+    # GitHub often starts scheduled runs late, so this starts early.
+    - cron: "17 20 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "How many minutes to log"
+        default: "270"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: noyes-logger
+
+jobs:
+  log:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Log in 60-minute chunks, committing after each
+        env:
+          CTA_API_KEY: ${{ secrets.CTA_API_KEY }}
+          TOTAL: ${{ inputs.minutes || '270' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          commit() {
+            git add data
+            git diff --cached --quiet && return 0
+            git commit -qm "data: $(date -u +%Y-%m-%dT%H:%MZ)"
+            git pull -q --rebase && git push -q
+          }
+          remaining=$TOTAL
+          while [ "$remaining" -gt 0 ]; do
+            chunk=$(( remaining < 60 ? remaining : 60 ))
+            python noyes.py log --minutes "$chunk" > /dev/null || echo "logger exited with $?"
+            commit
+            remaining=$(( remaining - chunk ))
+          done
+
+      - name: Final commit (runs even if the job failed)
+        if: always()
+        run: |
+          git add data 2>/dev/null || exit 0
+          git diff --cached --quiet && exit 0
+          git commit -qm "data: final $(date -u +%Y-%m-%dT%H:%MZ)"
+          git pull -q --rebase && git push -q
