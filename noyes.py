@@ -409,7 +409,7 @@ def main():
         p.add_argument("--turn", type=float, default=2.0, help="min. turnaround at Linden, minutes (default 2)")
         p.add_argument("--run", type=float, default=3.5, help="Linden departure -> Noyes, minutes (default 3.5)")
         p.add_argument("--dest", default="Loop", help="destination to catch: Loop (express), Howard, or any")
-        p.add_argument("--walk", type=float, default=12.0, help="walk to Noyes, minutes (default 12)")
+        p.add_argument("--walk", type=float, default=13.4, help="office chair to Noyes platform, minutes (default 13.4 = 13:21 timed)")
         p.add_argument("--buffer", type=float, default=1.0, help="extra minutes of margin (default 1)")
         p.add_argument("--slack", type=float, default=1.0,
                        help="still count a train as catchable if it's this many min tighter than the walk")
