@@ -23,7 +23,8 @@ python3 noyes.py trips          # Noyes <-> Wilson ride times vs the 14-min time
 
 Repo secrets: `CTA_API_KEY` (required) and `NTFY_TOPIC` (for phone pushes).
 
-- **Log Purple Line data** (`log.yml`): runs weekday mornings and afternoons and commits CSVs to `data/`.
+- **Log Purple Line data** (`log.yml`): logs during weekday Purple Line Express service,
+  4:30–10:55am and 1:30–8:10pm Chicago time (DST-proof), and commits CSVs to `data/`.
 - **Leave-now alerts (toggle)** (`go.yml`): each start is a button press. Alerts off → on
   (pushes "Noyes alerts ON" with the plan, then "Leave now" at the right time, then turns
   itself off; auto-off after 2 h). Alerts on → off.

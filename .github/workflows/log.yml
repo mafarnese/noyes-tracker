@@ -1,17 +1,28 @@
 name: Log Purple Line data
 
+# Logs during weekday Purple Line Express service (CTA timetable eff. 05/26):
+#   AM: Loop-bound express leaves Linden 5:07-9:18; Linden-bound express at Wilson 6:22-10:32
+#   PM: Loop-bound express leaves Linden 2:07-6:26; Linden-bound express at Wilson 3:23-7:41
+# Windows (Chicago time), with margin on both ends:
+#   AM 4:30-10:55   PM 1:30-8:10
+#
+# GitHub cron only speaks UTC, so each window has two triggers an hour apart
+# (one right for CDT, one for CST). The "plan" job checks the Chicago clock:
+# the trigger that fires too early is skipped, and a duplicate that starts
+# after the window has ended exits immediately.
+# Each window is split into two jobs because GitHub caps a job at 6 hours.
+
 on:
   schedule:
-    # GitHub cron is UTC and often starts late, so both windows start early.
-    # Morning: 11:17 UTC = 6:17am CDT (5:17am CST after Nov 1), logs 4.5 h
-    - cron: "17 11 * * 1-5"
-    # Afternoon: 20:17 UTC = 3:17pm CDT (2:17pm CST after Nov 1), logs 4.5 h
-    - cron: "17 20 * * 1-5"
+    - cron: "27 9 * * 1-5"    # 4:27am CDT / 3:27am CST
+    - cron: "27 10 * * 1-5"   # 5:27am CDT / 4:27am CST
+    - cron: "27 18 * * 1-5"   # 1:27pm CDT / 12:27pm CST
+    - cron: "27 19 * * 1-5"   # 2:27pm CDT / 1:27pm CST
   workflow_dispatch:
     inputs:
       minutes:
-        description: "How many minutes to log"
-        default: "270"
+        description: "How many minutes to log (manual run)"
+        default: "120"
 
 permissions:
   contents: write
@@ -20,41 +31,57 @@ concurrency:
   group: noyes-logger
 
 jobs:
-  log:
+  plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 340
+    outputs:
+      run: ${{ steps.p.outputs.run }}
+      mid: ${{ steps.p.outputs.mid }}
+      end: ${{ steps.p.outputs.end }}
+    steps:
+      - id: p
+        env:
+          EVENT: ${{ github.event_name }}
+          MINUTES: ${{ inputs.minutes || '120' }}
+        run: |
+          export TZ=America/Chicago
+          now=$((10#$(date +%H%M)))
+          if [ "$EVENT" = workflow_dispatch ]; then
+            end=$(date -d "+$MINUTES min" +%H%M); mid=$end
+          elif [ $now -ge 415 ] && [ $now -lt 1055 ]; then
+            mid=0745; end=1055
+          elif [ $now -ge 1315 ] && [ $now -lt 2010 ]; then
+            mid=1700; end=2010
+          else
+            echo "Chicago time $(date +%H:%M): outside a logging window, skipping."
+            echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ $now -ge $((10#$end)) ]; then
+            echo "Window already over (duplicate trigger), skipping."
+            echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "Chicago time $(date +%H:%M): logging until $mid, then until $end."
+          { echo "run=true"; echo "mid=$mid"; echo "end=$end"; } >> "$GITHUB_OUTPUT"
+
+  part1:
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Log in 60-minute chunks, committing after each
+      - name: Log until ${{ needs.plan.outputs.mid }}
         env:
           CTA_API_KEY: ${{ secrets.CTA_API_KEY }}
-          TOTAL: ${{ inputs.minutes || '270' }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
-          commit() {
-            git add data
-            git diff --cached --quiet && return 0
-            git commit -qm "data: $(date -u +%Y-%m-%dT%H:%MZ)"
-            git pull -q --rebase && git push -q
-          }
-          remaining=$TOTAL
-          while [ "$remaining" -gt 0 ]; do
-            chunk=$(( remaining < 60 ? remaining : 60 ))
-            python noyes.py log --minutes "$chunk" > /dev/null || echo "logger exited with $?"
-            commit
-            remaining=$(( remaining - chunk ))
-          done
+        run: scripts/log_until.sh "${{ needs.plan.outputs.mid }}"
 
-      - name: Final commit (runs even if the job failed)
-        if: always()
-        run: |
-          git add data 2>/dev/null || exit 0
-          git diff --cached --quiet && exit 0
-          git commit -qm "data: final $(date -u +%Y-%m-%dT%H:%MZ)"
-          git pull -q --rebase && git push -q
+  part2:
+    needs: [plan, part1]
+    if: always() && needs.plan.outputs.run == 'true' && needs.plan.outputs.mid != needs.plan.outputs.end
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log until ${{ needs.plan.outputs.end }}
+        env:
+          CTA_API_KEY: ${{ secrets.CTA_API_KEY }}
+        run: scripts/log_until.sh "${{ needs.plan.outputs.end }}"
