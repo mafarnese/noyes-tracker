@@ -13,7 +13,7 @@ prediction kicks in.
 ```bash
 export CTA_API_KEY=...          # https://www.transitchicago.com/developers/traintrackerapply/
 export NTFY_TOPIC=...           # optional: ntfy.sh topic for phone pings
-python3 noyes.py go             # ping when it's time to leave (walk = 13.4 min)
+python3 noyes.py go             # ping ~16 min before the train (13.4 walk + 2.5 buffer)
 python3 noyes.py analyze        # calibrate from data/
 ```
 
