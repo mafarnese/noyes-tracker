@@ -1,0 +1,62 @@
+name: Leave-now alerts (toggle)
+
+# Each start of this workflow is one button press.
+#   Alerts off -> turns them on: watches Noyes and pushes "Leave now" to ntfy, then turns off.
+#   Alerts on  -> turns them off (cancels the running watcher).
+# Started from an iPhone Shortcut (see README) or the Actions tab.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dest:
+        description: "Train to catch: Loop (express), Howard, or any"
+        default: "Loop"
+      minutes:
+        description: "Auto-off after this many minutes"
+        default: "120"
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  toggle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 200
+    steps:
+      - name: If alerts are already on, turn them off
+        id: toggle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          runs() { gh api "repos/$GITHUB_REPOSITORY/actions/workflows/go.yml/runs?status=$1" --jq '.workflow_runs[].id'; }
+          others=$( { runs in_progress; runs queued; } | grep -vx "$GITHUB_RUN_ID" || true )
+          if [ -n "$others" ]; then
+            for id in $others; do gh run cancel "$id" -R "$GITHUB_REPOSITORY" || true; done
+            if [ -n "$NTFY_TOPIC" ]; then
+              curl -sS -H "Title: Noyes alerts OFF" -H "Tags: no_bell" \
+                -d "Turned off. Press again to turn back on." "https://ntfy.sh/$NTFY_TOPIC" > /dev/null
+            fi
+            echo "Alerts were on; turned them off."
+            echo "off=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.toggle.outputs.off != 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.toggle.outputs.off != 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Watch Noyes and ping when it's time to leave
+        if: steps.toggle.outputs.off != 'true'
+        env:
+          CTA_API_KEY: ${{ secrets.CTA_API_KEY }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          DEST: ${{ inputs.dest || 'Loop' }}
+          MINUTES: ${{ inputs.minutes || '120' }}
+        run: |
+          if [ -z "$NTFY_TOPIC" ]; then echo "::warning::NTFY_TOPIC secret is not set; no phone pushes will be sent."; fi
+          python noyes.py go --announce --dest "$DEST" --minutes "$MINUTES" --data /tmp/noyes-data

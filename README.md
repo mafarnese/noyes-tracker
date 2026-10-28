@@ -17,5 +17,26 @@ python3 noyes.py go             # ping ~16 min before the train (13.4 walk + 2.5
 python3 noyes.py analyze        # calibrate from data/
 ```
 
-The GitHub Action needs a repo secret named `CTA_API_KEY`.
-Run it on demand from the Actions tab via **Run workflow**.
+
+## GitHub Actions
+
+Repo secrets: `CTA_API_KEY` (required) and `NTFY_TOPIC` (for phone pushes).
+
+- **Log Purple Line data** (`log.yml`): runs weekday afternoons and commits CSVs to `data/`.
+- **Leave-now alerts (toggle)** (`go.yml`): each start is a button press. Alerts off → on
+  (pushes "Noyes alerts ON" with the plan, then "Leave now" at the right time, then turns
+  itself off; auto-off after 2 h). Alerts on → off.
+
+## Phone button (iPhone Shortcut)
+
+1. Create a fine-grained token at https://github.com/settings/personal-access-tokens/new
+   - Repository access: **Only select repositories** → `noyes-tracker`
+   - Permissions → Repository → **Actions: Read and write**
+2. In Shortcuts, make a new shortcut with one action, **Get Contents of URL**:
+   - URL: `https://api.github.com/repos/mafarnese/noyes-tracker/actions/workflows/go.yml/dispatches`
+   - Method: **POST**
+   - Headers: `Authorization` = `Bearer <your token>`, `Accept` = `application/vnd.github+json`
+   - Request Body: **JSON**, one Text field: `ref` = `main`
+3. Name it "Noyes" and add it to your Home Screen, Control Center, Action button, or say "Hey Siri, Noyes."
+
+Each press shows up in ntfy within about 15–30 seconds as "Noyes alerts ON" or "Noyes alerts OFF".

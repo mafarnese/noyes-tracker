@@ -113,13 +113,13 @@ class CsvLog:
             w.writerows(rows)
 
 
-def notify(title, msg, topic):
+def notify(title, msg, topic, priority="high", tags="train"):
     print(f"\a\n>>> {title}: {msg}\n", flush=True)
     if topic:
         try:
             req = urllib.request.Request(
                 f"https://ntfy.sh/{topic}", data=msg.encode("utf-8"),
-                headers={"Title": title, "Priority": "high", "Tags": "train"})
+                headers={"Title": title, "Priority": priority, "Tags": tags})
             urllib.request.urlopen(req, timeout=10).close()
         except Exception as e:  # never let a failed push kill the loop
             print(f"(ntfy push failed: {e})", file=sys.stderr)
@@ -235,11 +235,16 @@ def cmd_run(args, ping):
     slack = timedelta(minutes=args.slack)
     pinged = set()
     stop_at = time.monotonic() + args.minutes * 60 if args.minutes else None
+    announce = ping and getattr(args, "announce", False)
+    announced = False
     print(f"{'Watching' if ping else 'Logging'} Noyes southbound "
           f"(dest={args.dest}, walk={args.walk}m, buffer={args.buffer}m, poll={args.interval}s). Ctrl-C to stop.")
     while True:
         if stop_at and time.monotonic() >= stop_at:
             print(f"Reached --minutes {args.minutes:g}; stopping.")
+            if announce and not pinged:
+                notify("Noyes alerts off", f"Timed out after {args.minutes:g} min with no leave-now ping "
+                       f"(no catchable {args.dest} train?).", topic, priority="default", tags="zzz")
             return
         try:
             now, cands = poll(args, logs)
@@ -249,6 +254,18 @@ def cmd_run(args, ping):
             continue
 
         usable = [c for c in cands if dest_ok(c, args.dest) and c.est - now >= walk - slack]
+        if announce and not announced:
+            if usable:
+                c0 = usable[0]
+                lv = c0.est - walk - buf
+                when = "now" if lv <= now else f"at {hm(lv)}"
+                note = " Express or shuttle isn't known until it leaves Linden." if "(or" in c0.dest else ""
+                msg = (f"Next {c0.dest} train: Noyes ~{hm(c0.est)} ({describe(c0)}). "
+                       f"Leave ping {when}.{note} Press again to turn off.")
+            else:
+                msg = f"No catchable {args.dest} train listed yet; watching. Press again to turn off."
+            notify("Noyes alerts ON", msg, topic, priority="default", tags="bell")
+            announced = True
         if not usable:
             print(f"[{fmt(now)}] no catchable {args.dest} train listed yet", flush=True)
         else:
@@ -418,6 +435,8 @@ def main():
     go = sub.add_parser("go", help="ping me when it's time to leave (also logs)")
     common(go)
     go.add_argument("--stay", action="store_true", help="keep running/logging after the ping")
+    go.add_argument("--announce", action="store_true",
+                    help="push an 'alerts ON' message after the first poll and an 'off' message on timeout")
     lg = sub.add_parser("log", help="collect data only, no pings")
     common(lg)
     an = sub.add_parser("analyze", help="calibrate from logs")
