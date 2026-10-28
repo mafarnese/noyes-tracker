@@ -414,6 +414,57 @@ def cmd_analyze(args):
               f"(fast-turn quartile) --run {statistics.median(run):.1f}")
 
 
+def station_events(rows):
+    """One run's position rows (sorted) -> [(station, trDr, arrival_time)].
+
+    Each block of polls where the train's next stop is S ends when it reaches S.
+    Arrival = the last predicted arrT in that block, capped at the first poll
+    showing a different next stop (accurate to about one poll interval)."""
+    ev, i = [], 0
+    while i < len(rows):
+        j = i
+        while (j + 1 < len(rows) and rows[j + 1]["nextStaNm"] == rows[i]["nextStaNm"]
+               and rows[j + 1]["trDr"] == rows[i]["trDr"]):
+            j += 1
+        if j + 1 < len(rows):
+            arr = min(parse_t(rows[j]["arrT"]), parse_t(rows[j + 1]["poll_ts"]))
+            ev.append((rows[i]["nextStaNm"], rows[i]["trDr"], arr))
+        i = j + 1
+    return ev
+
+
+def cmd_trips(args):
+    """Door-to-door ride times between two stations, from the position logs."""
+    pos = read_csv(Path(args.data) / "purple_positions.csv")
+    if not pos:
+        sys.exit("No position data yet - run `log` first.")
+    by_rn = defaultdict(list)
+    for r in sorted(pos, key=lambda r: r["poll_ts"]):
+        by_rn[r["rn"]].append(r)
+    a, b = args.a, args.b
+    legs = {"5": (a, b), "1": (b, a)}  # SB: a -> b, NB: b -> a (a is the northern station)
+    found = defaultdict(list)
+    for rn, rows in by_rn.items():
+        for rows_seg in segment(rows, timedelta(minutes=25)):
+            ev = station_events(rows_seg)
+            for k, (sta, d, t) in enumerate(ev):
+                if d not in legs or sta != legs[d][0]:
+                    continue
+                end = next((t2 for s2, d2, t2 in ev[k + 1:] if s2 == legs[d][1] and d2 == d), None)
+                if end and timedelta(0) < end - t < timedelta(minutes=60):
+                    found[d].append((t, rn, mins(end - t)))
+    for d, label in (("5", f"{a} -> {b} (southbound)"), ("1", f"{b} -> {a} (northbound)")):
+        trips = sorted(set(found[d]))
+        print(f"\n{label}: {len(trips)} trips")
+        for t, rn, m in trips:
+            print(f"  {t:%a %m-%d %H:%M}  run {rn:<4} {m:5.1f} min")
+        if trips:
+            xs = [m for _, _, m in trips]
+            summarize("ride time", xs)
+            if args.timetable:
+                print(f"  vs timetable {args.timetable:g} min: median {statistics.median(xs) - args.timetable:+.1f} min")
+
+
 # ----------------------------------------------------------------- main
 
 def main():
@@ -441,11 +492,18 @@ def main():
     common(lg)
     an = sub.add_parser("analyze", help="calibrate from logs")
     an.add_argument("--data", default="data")
+    tr = sub.add_parser("trips", help="ride times between two stations (default Noyes <-> Wilson)")
+    tr.add_argument("--data", default="data")
+    tr.add_argument("--a", default="Noyes", help="northern station (default Noyes)")
+    tr.add_argument("--b", default="Wilson", help="southern station (default Wilson)")
+    tr.add_argument("--timetable", type=float, default=14.0, help="scheduled ride time to compare against")
 
     args = ap.parse_args()
     try:
         if args.cmd == "analyze":
             cmd_analyze(args)
+        elif args.cmd == "trips":
+            cmd_trips(args)
         else:
             cmd_run(args, ping=(args.cmd == "go"))
     except KeyboardInterrupt:

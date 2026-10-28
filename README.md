@@ -15,6 +15,7 @@ export CTA_API_KEY=...          # https://www.transitchicago.com/developers/trai
 export NTFY_TOPIC=...           # optional: ntfy.sh topic for phone pings
 python3 noyes.py go             # ping ~16 min before the train (13.4 walk + 2.5 buffer)
 python3 noyes.py analyze        # calibrate from data/
+python3 noyes.py trips          # Noyes <-> Wilson ride times vs the 14-min timetable
 ```
 
 
@@ -22,7 +23,7 @@ python3 noyes.py analyze        # calibrate from data/
 
 Repo secrets: `CTA_API_KEY` (required) and `NTFY_TOPIC` (for phone pushes).
 
-- **Log Purple Line data** (`log.yml`): runs weekday afternoons and commits CSVs to `data/`.
+- **Log Purple Line data** (`log.yml`): runs weekday mornings and afternoons and commits CSVs to `data/`.
 - **Leave-now alerts (toggle)** (`go.yml`): each start is a button press. Alerts off → on
   (pushes "Noyes alerts ON" with the plan, then "Leave now" at the right time, then turns
   itself off; auto-off after 2 h). Alerts on → off.

@@ -2,8 +2,10 @@ name: Log Purple Line data
 
 on:
   schedule:
-    # 20:17 UTC on weekdays = 3:17pm CDT (2:17pm CST after Nov 1).
-    # GitHub often starts scheduled runs late, so this starts early.
+    # GitHub cron is UTC and often starts late, so both windows start early.
+    # Morning: 11:17 UTC = 6:17am CDT (5:17am CST after Nov 1), logs 4.5 h
+    - cron: "17 11 * * 1-5"
+    # Afternoon: 20:17 UTC = 3:17pm CDT (2:17pm CST after Nov 1), logs 4.5 h
     - cron: "17 20 * * 1-5"
   workflow_dispatch:
     inputs:
