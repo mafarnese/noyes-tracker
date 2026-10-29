@@ -1,5 +1,5 @@
 name: Schedule test (temporary)
-# Edit this line and commit from github.com to test the schedule:
+# Edit this line and commit from github.com to test the schedule: x
 on:
   schedule:
     - cron: "*/5 * * * *"
