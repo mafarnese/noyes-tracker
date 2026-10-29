@@ -11,6 +11,11 @@ name: Log Purple Line data
 # the trigger that fires too early is skipped, and a duplicate that starts
 # after the window has ended exits immediately.
 # Each window is split into two jobs because GitHub caps a job at 6 hours.
+#
+# GitHub's scheduler has not been firing for this repo, so the windows can
+# also be started from outside (phone automation, etc.) with a plain
+# workflow_dispatch: minutes defaults to 'auto', which picks the window
+# from the Chicago clock exactly like a scheduled run.
 
 on:
   schedule:
@@ -21,8 +26,8 @@ on:
   workflow_dispatch:
     inputs:
       minutes:
-        description: "How many minutes to log (manual run)"
-        default: "120"
+        description: "'auto' = the current express window; or a number of minutes"
+        default: "auto"
 
 permissions:
   contents: write
@@ -41,11 +46,11 @@ jobs:
       - id: p
         env:
           EVENT: ${{ github.event_name }}
-          MINUTES: ${{ inputs.minutes || '120' }}
+          MINUTES: ${{ inputs.minutes || 'auto' }}
         run: |
           export TZ=America/Chicago
           now=$((10#$(date +%H%M)))
-          if [ "$EVENT" = workflow_dispatch ]; then
+          if [ "$EVENT" = workflow_dispatch ] && [ "$MINUTES" != auto ]; then
             end=$(date -d "+$MINUTES min" +%H%M); mid=$end
           elif [ $now -ge 415 ] && [ $now -lt 1055 ]; then
             mid=0745; end=1055
