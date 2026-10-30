@@ -74,10 +74,19 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main   # latest main, not the commit the run started from
       - name: Log until ${{ needs.plan.outputs.mid }}
         env:
           CTA_API_KEY: ${{ secrets.CTA_API_KEY }}
         run: scripts/log_until.sh "${{ needs.plan.outputs.mid }}"
+      - name: Keep a copy of the data even if the push failed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-${{ github.run_id }}-part1
+          path: data/
+          retention-days: 30
 
   part2:
     needs: [plan, part1]
@@ -86,7 +95,16 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main   # picks up part1's data commits
       - name: Log until ${{ needs.plan.outputs.end }}
         env:
           CTA_API_KEY: ${{ secrets.CTA_API_KEY }}
         run: scripts/log_until.sh "${{ needs.plan.outputs.end }}"
+      - name: Keep a copy of the data even if the push failed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-${{ github.run_id }}-part2
+          path: data/
+          retention-days: 30

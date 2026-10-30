@@ -12,9 +12,15 @@ commit() {
   git add data 2>/dev/null || return 0
   git diff --cached --quiet && return 0
   git commit -qm "data: $(date -u +%Y-%m-%dT%H:%MZ)"
-  for i in 1 2 3; do git pull -q --rebase && git push -q && return 0; sleep 5; done
-  echo "::warning::push failed"
+  for i in 1 2 3; do
+    git pull -q --rebase origin main && git push -q origin HEAD:main && return 0
+    git rebase --abort 2>/dev/null; sleep 5
+  done
+  echo "::error::push failed; data kept in the run's artifact"
 }
+
+# Start from the newest data on main so later commits rebase cleanly.
+git pull -q --rebase origin main || echo "::warning::initial pull failed"
 
 while :; do
   left=$(( (target - $(date +%s)) / 60 ))
