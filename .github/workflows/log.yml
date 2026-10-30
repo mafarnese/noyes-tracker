@@ -4,7 +4,7 @@ name: Log Purple Line data
 #   AM: Loop-bound express leaves Linden 5:07-9:18; Linden-bound express at Wilson 6:22-10:32
 #   PM: Loop-bound express leaves Linden 2:07-6:26; Linden-bound express at Wilson 3:23-7:41
 # Windows (Chicago time), with margin on both ends:
-#   AM 4:30-10:55   PM 1:30-8:10
+#   AM 4:30-11:20   PM 1:30-8:10 (AM runs late: last Linden-bound express leaves Wilson ~10:30-10:40 and takes ~20 min)
 #
 # GitHub cron only speaks UTC, so each window has two triggers an hour apart
 # (one right for CDT, one for CST). The "plan" job checks the Chicago clock:
@@ -52,8 +52,8 @@ jobs:
           now=$((10#$(date +%H%M)))
           if [ "$EVENT" = workflow_dispatch ] && [ "$MINUTES" != auto ]; then
             end=$(date -d "+$MINUTES min" +%H%M); mid=$end
-          elif [ $now -ge 415 ] && [ $now -lt 1055 ]; then
-            mid=0745; end=1055
+          elif [ $now -ge 415 ] && [ $now -lt 1120 ]; then
+            mid=0750; end=1120
           elif [ $now -ge 1315 ] && [ $now -lt 2010 ]; then
             mid=1700; end=2010
           else
