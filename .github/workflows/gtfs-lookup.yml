@@ -1,0 +1,25 @@
+name: GTFS schedule lookup (one-off)
+on:
+  workflow_dispatch:
+    inputs:
+      route: {description: "CTA route id", default: "146"}
+      words: {description: "comma-separated words that must all appear in the stop name", default: "montrose,marine"}
+      date: {description: "YYYY-MM-DD", required: true}
+      start: {description: "HH:MM", default: "05:30"}
+      end: {description: "HH:MM", default: "07:15"}
+permissions:
+  contents: write
+jobs:
+  lookup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: main}
+      - name: Look up scheduled times
+        run: |
+          out="lookups/${{ inputs.route }}_${{ inputs.date }}.csv"
+          python3 scripts/gtfs_lookup.py "${{ inputs.route }}" "${{ inputs.words }}" "${{ inputs.date }}" "${{ inputs.start }}" "${{ inputs.end }}" "$out"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add lookups && git commit -qm "lookup: route ${{ inputs.route }} ${{ inputs.date }}" && git pull -q --rebase origin main && git push -q origin HEAD:main
