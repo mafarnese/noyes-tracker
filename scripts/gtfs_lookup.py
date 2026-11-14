@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Scheduled times for a CTA route at stops matching a name, on a given date, from CTA's GTFS feed.
 usage: gtfs_lookup.py ROUTE "WORD1,WORD2" YYYY-MM-DD HH:MM HH:MM OUT.csv"""
-import csv, io, sys, zipfile, urllib.request, datetime as dt
+import csv, io, os, sys, zipfile, urllib.request, datetime as dt
 route, words, day, t0, t1, out = sys.argv[1:7]
 words = [w.strip().lower() for w in words.split(",")]
 URL = "https://www.transitchicago.com/downloads/sch_data/google_transit.zip"
@@ -26,6 +26,7 @@ for r in rows("stop_times.txt"):
             res.append(dict(time=r["departure_time"], stop_id=r["stop_id"], stop_name=stops[r["stop_id"]],
                             direction=tr.get("direction", tr.get("direction_id", "")), headsign=tr.get("trip_headsign", ""), trip_id=r["trip_id"]))
 res.sort(key=lambda x: (x["stop_name"], x["time"]))
+os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
 with open(out, "w", newline="") as f:
     w = csv.DictWriter(f, fieldnames=["time", "stop_id", "stop_name", "direction", "headsign", "trip_id"]); w.writeheader(); w.writerows(res)
 info = f"# feed fetched {dt.datetime.utcnow():%Y-%m-%d %H:%MZ}; date {day} ({wd}); active services {sorted(active)}; matching stops {stops}; route {route} trips {len(trips)}\n"
